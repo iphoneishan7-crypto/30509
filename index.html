@@ -921,26 +921,26 @@
       }
     }
 
-    function connectWs() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${proto}://${location.host}`;
-      console.log('[WS] Connecting to:', wsUrl);
+   function connectWs() {
+  const wsUrl = "wss://three0509.onrender.com"; // 🔥 tera backend
 
-      ws = new WebSocket(wsUrl);
+  console.log('[WS] Connecting to:', wsUrl);
 
-      ws.onopen = () => {
-        console.log('[WS] Connection established');
-        setConnected(true);
-      };
+  ws = new WebSocket(wsUrl);
 
-      ws.onmessage = (event) => {
-        let data;
-        try {
-          data = JSON.parse(event.data);
-        } catch (e) {
-          console.error('[WS] Failed to parse message:', event.data);
-          return;
-        }
+  ws.onopen = () => {
+    console.log('[WS] Connection established');
+    setConnected(true);
+  };
+
+  ws.onmessage = (event) => {
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      console.error('[WS] Failed to parse message:', event.data);
+      return;
+    }
 
         console.log('[WS] Received:', data);
 
