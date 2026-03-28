@@ -3,170 +3,114 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// ─── HTTP Server ─────────────────────────────────────────────────────────────
+// ─── HTTP SERVER ─────────────────────────────────────
 const server = http.createServer((req, res) => {
   const safeBase = path.resolve(__dirname);
-  let filePath = path.resolve(__dirname, req.url === '/' ? 'index.html' : req.url.slice(1));
+  let filePath = path.resolve(
+    __dirname,
+    req.url === '/' ? 'index.html' : req.url.slice(1)
+  );
 
-  // Security: block path traversal
   if (!filePath.startsWith(safeBase)) {
     res.writeHead(403);
-    res.end('Forbidden');
-    return;
+    return res.end('Forbidden');
   }
 
   const extMap = {
     '.html': 'text/html',
-    '.css':  'text/css',
-    '.js':   'application/javascript',
-    '.ico':  'image/x-icon',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
   };
+
   const ext = path.extname(filePath);
   const contentType = extMap[ext] || 'text/plain';
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(404, { 'Content-Type': 'text/html' });
-      res.end('<h1>404 Not Found</h1>');
-      return;
+      res.writeHead(404);
+      return res.end('Not Found');
     }
     res.writeHead(200, { 'Content-Type': contentType });
     res.end(data);
   });
 });
 
-// ─── WebSocket Server ─────────────────────────────────────────────────────────
+// ─── WEBSOCKET ─────────────────────────────────────
 const wss = new WebSocketServer({ server });
 
-// Track connected clients: Map<ws, { id, joinedAt }>
 const clients = new Map();
-
-// Shared state
 let sharedUrl = '';
 
 function generateId() {
-  return 'user_' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  return 'user_' + Math.random().toString(36).slice(2, 8);
 }
 
-function broadcast(data, excludeWs = null) {
+function broadcast(data, exclude = null) {
   const msg = JSON.stringify(data);
-  wss.clients.forEach(client => {
-    if (client.readyState === 1 && client !== excludeWs) {
-      client.send(msg);
-    }
-  });
-}
-
-function broadcastAll(data) {
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(msg);
+  wss.clients.forEach(c => {
+    if (c.readyState === 1 && c !== exclude) {
+      c.send(msg);
     }
   });
 }
 
 wss.on('connection', (ws) => {
   const userId = generateId();
-  clients.set(ws, { id: userId, joinedAt: Date.now() });
-  const userCount = clients.size;
+  clients.set(ws, userId);
 
-  console.log(`[WS] Client connected: ${userId} | Total clients: ${userCount}`);
+  console.log('Connected:', userId);
 
-  // Send this client their own ID + current shared URL + user count
   ws.send(JSON.stringify({
     type: 'init',
     userId,
-    sharedUrl,
-    userCount,
+    sharedUrl
   }));
 
-  // Notify others that user count changed
-  broadcast({ type: 'user_count', userCount }, ws);
-
-  // Notify this client that they joined
-  broadcastAll({
-    type: 'system',
-    text: userCount === 1 ? 'You are connected. Waiting for the other user...' : `${userId} joined the session`,
-    userCount,
-  });
-
-  // ── Handle incoming messages ──
   ws.on('message', (raw) => {
     let data;
     try {
       data = JSON.parse(raw);
-    } catch (e) {
-      console.error('[WS] Invalid JSON from client:', raw);
+    } catch {
       return;
     }
 
-    const client = clients.get(ws);
-    if (!client) return;
+    const sender = clients.get(ws);
 
-    console.log(`[WS] Message from ${client.id}:`, data);
+    // CHAT
+    if (data.type === 'chat') {
+      const msg = {
+        type: 'chat',
+        text: data.text,
+        senderId: sender
+      };
 
-    switch (data.type) {
-      // ── Chat message ──
-      case 'chat': {
-        const msg = {
-          type: 'chat',
-          senderId: client.id,
-          text: data.text,
-          timestamp: Date.now(),
-        };
-        console.log(`[WS] Chat → broadcast: "${data.text}" from ${client.id}`);
-        // Echo back to sender (so they see their own message confirmed)
-        ws.send(JSON.stringify({ ...msg, self: true }));
-        // Send to others
-        broadcast({ ...msg, self: false }, ws);
-        break;
-      }
+      // sender ko bhi
+      ws.send(JSON.stringify({ ...msg, self: true }));
 
-      // ── URL sync ──
-      case 'url_sync': {
-        sharedUrl = data.url;
-        console.log(`[WS] URL sync → "${sharedUrl}" from ${client.id}`);
-        // Send to all OTHER clients
-        broadcast({
-          type: 'url_sync',
-          url: sharedUrl,
-          fromId: client.id,
-        }, ws);
-        break;
-      }
+      // others ko
+      broadcast({ ...msg, self: false }, ws);
+    }
 
-      default:
-        console.warn('[WS] Unknown message type:', data.type);
+    // URL SYNC
+    if (data.type === 'url_sync') {
+      sharedUrl = data.url;
+
+      broadcast({
+        type: 'url_sync',
+        url: sharedUrl
+      }, ws);
     }
   });
 
-  // ── Handle disconnect ──
   ws.on('close', () => {
-    const client = clients.get(ws);
-    if (client) {
-      console.log(`[WS] Client disconnected: ${client.id}`);
-      clients.delete(ws);
-      const userCount = clients.size;
-      broadcastAll({
-        type: 'system',
-        text: `${client.id} left the session`,
-        userCount,
-      });
-      broadcastAll({ type: 'user_count', userCount });
-    }
-  });
-
-  ws.on('error', (err) => {
-    console.error('[WS] Socket error:', err.message);
+    console.log('Disconnected:', clients.get(ws));
+    clients.delete(ws);
   });
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+// ─── START ─────────────────────────────────────
 server.listen(PORT, () => {
-  console.log(`\n🚀 Server running at http://localhost:${PORT}`);
-  console.log(`📡 WebSocket ready on ws://localhost:${PORT}`);
-  console.log('─'.repeat(40));
+  console.log("Server running on port " + PORT);
 });
