@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SyncChat — Shared Browser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep:    #0a0c10;
+      --bg-panel:   #111318;
+      --bg-card:    #181b22;
+      --bg-input:   #1e222c;
+      --border:     #2a2f3d;
+      --border-glow:#3a4060;
+      --accent:     #6c63ff;
+      --accent-2:   #a78bfa;
+      --accent-glow:rgba(108,99,255,0.25);
+      --text-1:     #f0f2f8;
+      --text-2:     #9096b0;
+      --text-3:     #5a607a;
+      --green:      #22d3a0;
+      --red:        #f87171;
+      --yellow:     #fbbf24;
+      --bubble-self:    #6c63ff;
+      --bubble-other:   #1e222c;
+      --bubble-system:  rgba(108,99,255,0.07);
+      --radius:     12px;
+      --radius-sm:  8px;
+      --font:       'Inter', system-ui, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-deep);
+      color: var(--text-1);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ── Layout ────────────────────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header Bar ─────────────────────────────────────────────────── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .brand-name span {
+      color: var(--accent-2);
+    }
+
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #connection-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+      transition: all 0.3s;
+    }
+
+    #connection-badge.connected { border-color: rgba(34,211,160,0.4); color: var(--green); }
+    #connection-badge.disconnected { border-color: rgba(248,113,113,0.4); color: var(--red); }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #user-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(108,99,255,0.3);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-2);
+      display: none;
+    }
+
+    #user-count-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-2);
+    }
+
+    /* ── Browser Section (70%) ──────────────────────────────────────── */
+    #browser-section {
+      flex: 0 0 70%;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 2px solid var(--border);
+      overflow: hidden;
+      background: var(--bg-panel);
+    }
+
+    #url-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .url-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    #url-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      color: var(--text-1);
+      font-family: var(--font);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #url-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    #url-input::placeholder { color: var(--text-3); }
+
+    #go-btn {
+      padding: 8px 18px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    #go-btn:hover { opacity: 0.9; }
+    #go-btn:active { transform: scale(0.97); }
+
+    .sync-indicator {
+      font-size: 11px;
+      color: var(--text-3);
+      white-space: nowrap;
+    }
+
+    .sync-indicator.active { color: var(--green); }
+
+    /* ── iFrame Wrapper ──────────────────────────────────────────────── */
+    #iframe-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    #shared-browser {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    #browser-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: var(--bg-deep);
+      color: var(--text-3);
+      pointer-events: none;
+    }
+
+    #browser-placeholder.hidden { display: none; }
+
+    .placeholder-icon {
+      font-size: 52px;
+      opacity: 0.4;
+    }
+
+    .placeholder-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-2);
+    }
+
+    .placeholder-sub {
+      font-size: 13px;
+      text-align: center;
+      max-width: 300px;
+    }
+
+    #blocked-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: var(--bg-deep);
+      z-index: 5;
+    }
+
+    #blocked-overlay.visible { display: flex; }
+
+    .blocked-icon { font-size: 48px; }
+
+    .blocked-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-1);
+    }
+
+    .blocked-url {
+      font-size: 13px;
+      color: var(--accent-2);
+      background: var(--bg-input);
+      padding: 6px 14px;
+      border-radius: 6px;
+      max-width: 400px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .blocked-msg {
+      font-size: 13px;
+      color: var(--text-3);
+      text-align: center;
+      max-width: 340px;
+    }
+
+    #try-new-btn {
+      margin-top: 6px;
+      padding: 8px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-2);
+      font-family: var(--font);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    #try-new-btn:hover { border-color: var(--accent); color: var(--text-1); }
+
+    /* ── Chat Section (30%) ──────────────────────────────────────────── */
+    #chat-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-panel);
+    }
+
+    #chat-header {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .chat-header-icon { font-size: 14px; }
+
+    .chat-header-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Messages ────────────────────────────────────────────────────── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      max-width: 75%;
+      animation: slideUp 0.2s ease-out;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-row.self { align-self: flex-end; align-items: flex-end; }
+    .msg-row.other { align-self: flex-start; align-items: flex-start; }
+    .msg-row.system { align-self: center; align-items: center; max-width: 90%; }
+
+    .msg-meta {
+      font-size: 10px;
+      color: var(--text-3);
+      margin-bottom: 3px;
+      padding: 0 4px;
+    }
+
+    .msg-bubble {
+      padding: 8px 13px;
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .msg-row.self .msg-bubble {
+      background: var(--bubble-self);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-row.other .msg-bubble {
+      background: var(--bubble-other);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg-row.system .msg-bubble {
+      background: var(--bubble-system);
+      border: 1px solid rgba(108,99,255,0.15);
+      color: var(--text-3);
+      font-size: 11px;
+      text-align: center;
+      padding: 5px 14px;
+      border-radius: 20px;
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--text-3);
+      margin-top: 2px;
+      padding: 0 4px;
+    }
+
+    /* ── Input Area ──────────────────────────────────────────────────── */
+    #input-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-panel);
+      flex-shrink: 0;
+    }
+
+    #msg-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 9px 16px;
+      color: var(--text-1);
+      font-family: var(--font);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #msg-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    #msg-input::placeholder { color: var(--text-3); }
+
+    #send-btn {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    #send-btn:hover { opacity: 0.9; }
+    #send-btn:active { transform: scale(0.92); }
+    #send-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .send-icon {
+      width: 18px;
+      height: 18px;
+      fill: #fff;
+    }
+
+    /* ── Reconnecting Overlay ────────────────────────────────────────── */
+    #reconnect-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10,12,16,0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+
+    #reconnect-overlay.visible { display: flex; }
+
+    .reconnect-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 36px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .reconnect-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .reconnect-sub {
+      font-size: 13px;
+      color: var(--text-3);
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      #browser-section { flex: 0 0 60%; }
+      #chat-section { flex: 1; }
+      .msg-row { max-width: 90%; }
+
+      #url-bar { flex-wrap: wrap; }
+      .url-label { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Reconnecting overlay -->
+  <div id="reconnect-overlay">
+    <div class="reconnect-box">
+      <div class="spinner"></div>
+      <div class="reconnect-title">Reconnecting…</div>
+      <div class="reconnect-sub">Attempting to restore connection</div>
+    </div>
+  </div>
+
+  <div id="app">
+    <!-- ── Header ── -->
+    <header id="header">
+      <div class="brand">
+        <div class="brand-icon">🔗</div>
+        <div class="brand-name">Sync<span>Chat</span></div>
+      </div>
+      <div id="status-bar">
+        <div id="user-badge">—</div>
+        <div id="user-count-badge">👥 —</div>
+        <div id="connection-badge" class="disconnected">
+          <span class="dot"></span>
+          <span id="conn-text">Connecting…</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Shared Browser Section ── -->
+    <section id="browser-section">
+      <!-- URL Bar -->
+      <div id="url-bar">
+        <span class="url-label">🌐 Shared URL</span>
+        <input
+          id="url-input"
+          type="text"
+          placeholder="Enter a URL (e.g. wikipedia.org) — synced for both users"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="go-btn">Go →</button>
+        <span class="sync-indicator" id="sync-indicator">⬤ idle</span>
+      </div>
+
+      <!-- iFrame area -->
+      <div id="iframe-wrapper">
+        <!-- Blank canvas placeholder -->
+        <div id="browser-placeholder">
+          <div class="placeholder-icon">🖥️</div>
+          <div class="placeholder-title">Shared Browser</div>
+          <div class="placeholder-sub">
+            Enter a URL above to browse together.<br/>
+            Both users control the same page in real‑time.
+          </div>
+        </div>
+
+        <!-- Blocked site overlay -->
+        <div id="blocked-overlay">
+          <div class="blocked-icon">🚫</div>
+          <div class="blocked-title">This site cannot be displayed</div>
+          <div class="blocked-url" id="blocked-url-text">—</div>
+          <div class="blocked-msg">
+            This website has blocked embedding in iframes.<br/>
+            Try a different URL (e.g. Wikipedia, MDN, GitHub).
+          </div>
+          <button id="try-new-btn">← Try a Different URL</button>
+        </div>
+
+        <!-- The actual iframe -->
+        <iframe
+          id="shared-browser"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+          referrerpolicy="no-referrer"
+          title="Shared Browser"
+        ></iframe>
+      </div>
+    </section>
+
+    <!-- ── Chat Section ── -->
+    <section id="chat-section">
+      <div id="chat-header">
+        <span class="chat-header-icon">💬</span>
+        <span class="chat-header-title">Real-time Chat</span>
+      </div>
+
+      <div id="messages"></div>
+
+      <div id="input-area">
+        <input
+          id="msg-input"
+          type="text"
+          placeholder="Type a message…"
+          autocomplete="off"
+          maxlength="2000"
+        />
+        <button id="send-btn" disabled title="Send message">
+          <svg class="send-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ────────────────────────────────────────────────────
+    // STATE
+    // ────────────────────────────────────────────────────
+    let ws = null;
+    let myUserId = null;
+    let isConnected = false;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_DELAY = 8000;
+
+    // ────────────────────────────────────────────────────
+    // DOM REFS
+    // ────────────────────────────────────────────────────
+    const connBadge       = document.getElementById('connection-badge');
+    const connText        = document.getElementById('conn-text');
+    const userBadge       = document.getElementById('user-badge');
+    const userCountBadge  = document.getElementById('user-count-badge');
+    const urlInput        = document.getElementById('url-input');
+    const goBtn           = document.getElementById('go-btn');
+    const syncIndicator   = document.getElementById('sync-indicator');
+    const iframeEl        = document.getElementById('shared-browser');
+    const placeholder     = document.getElementById('browser-placeholder');
+    const blockedOverlay  = document.getElementById('blocked-overlay');
+    const blockedUrlText  = document.getElementById('blocked-url-text');
+    const tryNewBtn       = document.getElementById('try-new-btn');
+    const messagesEl      = document.getElementById('messages');
+    const msgInput        = document.getElementById('msg-input');
+    const sendBtn         = document.getElementById('send-btn');
+    const reconnOverlay   = document.getElementById('reconnect-overlay');
+
+    // ────────────────────────────────────────────────────
+    // URL UTILITIES
+    // ────────────────────────────────────────────────────
+    function normalizeUrl(raw) {
+      raw = raw.trim();
+      if (!raw) return null;
+
+      // Already has protocol
+      if (/^https?:\/\//i.test(raw)) return raw;
+
+      // Add https://
+      return 'https://' + raw;
+    }
+
+    function isValidUrl(url) {
+      try {
+        new URL(url);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // ────────────────────────────────────────────────────
+    // IFRAME / BROWSER
+    // ────────────────────────────────────────────────────
+    let currentUrl = '';
+    let blockedCheckTimer = null;
+
+    function loadUrl(url, fromRemote = false) {
+      if (!url) return;
+
+      const normalized = normalizeUrl(url);
+      if (!normalized || !isValidUrl(normalized)) {
+        console.warn('[Browser] Invalid URL:', url);
+        addSystemMsg('⚠️ Invalid URL — please include a valid domain.');
+        return;
+      }
+
+      currentUrl = normalized;
+      console.log('[Browser] Loading URL:', normalized, fromRemote ? '(remote sync)' : '(local)');
+
+      // Hide blocked overlay, show iframe
+      blockedOverlay.classList.remove('visible');
+      iframeEl.style.display = 'block';
+      placeholder.classList.add('hidden');
+
+      // Update URL input display
+      urlInput.value = normalized;
+
+      // Set iframe src
+      iframeEl.src = normalized;
+
+      // Set up blocked detection
+      clearTimeout(blockedCheckTimer);
+      blockedCheckTimer = setTimeout(() => {
+        checkIfBlocked(normalized);
+      }, 3000);
+
+      // Sync indicator
+      flashSyncIndicator(fromRemote ? '⬇ received' : '⬆ sent');
+    }
+
+    function checkIfBlocked(url) {
+      // We check by seeing if iframe contentDocument is accessible and has content.
+      // If same-origin headers block access, we can't tell; rely on error event.
+      try {
+        const doc = iframeEl.contentDocument || iframeEl.contentWindow?.document;
+        if (doc && (doc.title || doc.body?.innerHTML)) {
+          // Loaded fine (same-origin or allowed)
+          return;
+        }
+        // Cross-origin — we can't read the document, but that's normal and NOT a block
+      } catch (e) {
+        // Cross-origin access error is expected when the page loads fine
+        // This is normal — don't flag it as blocked
+      }
+    }
+
+    iframeEl.addEventListener('error', () => {
+      console.warn('[Browser] iframe load error for:', currentUrl);
+      showBlocked(currentUrl);
+    });
+
+    // Detect X-Frame-Options block: the iframe loads a blank page
+    iframeEl.addEventListener('load', () => {
+      try {
+        const loc = iframeEl.contentWindow?.location?.href;
+        // If location is blank but src was set, it might be blocked
+        if (loc === 'about:blank' && currentUrl) {
+          // Some browsers redirect to about:blank on X-Frame-Options block
+          // Give it a moment before showing blocked
+          setTimeout(() => {
+            try {
+              const loc2 = iframeEl.contentWindow?.location?.href;
+              if (loc2 === 'about:blank' && currentUrl) {
+                console.warn('[Browser] Possible X-Frame-Options block for:', currentUrl);
+                showBlocked(currentUrl);
+              }
+            } catch (e2) {
+              // cross-origin — page loaded normally
+            }
+          }, 1000);
+        }
+      } catch (e) {
+        // Cross-origin (page loaded fine, just can't access contentWindow)
+        console.log('[Browser] Cross-origin iframe loaded:', currentUrl);
+      }
+    });
+
+    function showBlocked(url) {
+      console.warn('[Browser] Showing blocked overlay for:', url);
+      blockedOverlay.classList.add('visible');
+      iframeEl.style.display = 'none';
+      blockedUrlText.textContent = url;
+      addSystemMsg(`🚫 "${url}" cannot be displayed in iframe.`);
+    }
+
+    tryNewBtn.addEventListener('click', () => {
+      blockedOverlay.classList.remove('visible');
+      iframeEl.style.display = 'block';
+      urlInput.focus();
+      urlInput.select();
+    });
+
+    function flashSyncIndicator(text) {
+      syncIndicator.textContent = text;
+      syncIndicator.classList.add('active');
+      setTimeout(() => {
+        syncIndicator.classList.remove('active');
+        syncIndicator.textContent = '⬤ idle';
+      }, 1500);
+    }
+
+    // ────────────────────────────────────────────────────
+    // URL GO BUTTON / ENTER
+    // ────────────────────────────────────────────────────
+    function handleGoUrl() {
+      const raw = urlInput.value.trim();
+      if (!raw) {
+        urlInput.focus();
+        return;
+      }
+
+      const url = normalizeUrl(raw);
+      if (!url || !isValidUrl(url)) {
+        addSystemMsg('⚠️ Invalid URL. Example: wikipedia.org');
+        return;
+      }
+
+      loadUrl(url, false);
+      sendUrlSync(url);
+    }
+
+    goBtn.addEventListener('click', handleGoUrl);
+
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleGoUrl();
+    });
+
+    // ────────────────────────────────────────────────────
+    // CHAT MESSAGES
+    // ────────────────────────────────────────────────────
+    function formatTime(ts) {
+      const d = new Date(ts);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function addMessage({ type, text, senderId, timestamp, self }) {
+      const row = document.createElement('div');
+      row.className = `msg-row ${type === 'system' ? 'system' : self ? 'self' : 'other'}`;
+
+      if (type === 'system') {
+        row.innerHTML = `<div class="msg-bubble">${escapeHtml(text)}</div>`;
+      } else {
+        const meta = self ? 'You' : (senderId || 'Other');
+        const time = formatTime(timestamp || Date.now());
+        row.innerHTML = `
+          <div class="msg-meta">${escapeHtml(meta)}</div>
+          <div class="msg-bubble">${escapeHtml(text)}</div>
+          <div class="msg-time">${time}</div>
+        `;
+      }
+
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addSystemMsg(text) {
+      addMessage({ type: 'system', text });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ────────────────────────────────────────────────────
+    // SEND CHAT
+    // ────────────────────────────────────────────────────
+    function sendChatMessage() {
+      const text = msgInput.value.trim();
+      if (!text || !isConnected) return;
+
+      console.log('[Chat] Sending message:', text);
+      ws.send(JSON.stringify({ type: 'chat', text }));
+      msgInput.value = '';
+      msgInput.focus();
+    }
+
+    sendBtn.addEventListener('click', sendChatMessage);
+
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+    // ────────────────────────────────────────────────────
+    // SEND URL SYNC
+    // ────────────────────────────────────────────────────
+    function sendUrlSync(url) {
+      if (!isConnected) return;
+      console.log('[WS] Sending url_sync:', url);
+      ws.send(JSON.stringify({ type: 'url_sync', url }));
+    }
+
+    // ────────────────────────────────────────────────────
+    // WEBSOCKET
+    // ────────────────────────────────────────────────────
+    function setConnected(val) {
+      isConnected = val;
+      connBadge.className = 'connected' + (val ? ' connected' : ' disconnected');
+      connBadge.classList.add(val ? 'connected' : 'disconnected');
+      connText.textContent = val ? 'Connected' : 'Disconnected';
+      sendBtn.disabled = !val;
+
+      if (val) {
+        reconnOverlay.classList.remove('visible');
+        reconnectAttempts = 0;
+      }
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${proto}://${location.host}`;
+      console.log('[WS] Connecting to:', wsUrl);
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('[WS] Connection established');
+        setConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        let data;
+        try {
+          data = JSON.parse(event.data);
+        } catch (e) {
+          console.error('[WS] Failed to parse message:', event.data);
+          return;
+        }
+
+        console.log('[WS] Received:', data);
+
+        switch (data.type) {
+          case 'init':
+            myUserId = data.userId;
+            userBadge.textContent = `🧑 ${myUserId}`;
+            userBadge.style.display = 'block';
+            userCountBadge.textContent = `👥 ${data.userCount}`;
+            console.log('[WS] Init — my ID:', myUserId, '| userCount:', data.userCount);
+
+            // Load existing shared URL if any
+            if (data.sharedUrl) {
+              console.log('[WS] Restoring shared URL:', data.sharedUrl);
+              loadUrl(data.sharedUrl, true);
+            }
+            break;
+
+          case 'chat':
+            console.log('[Chat] Received message from:', data.senderId);
+            addMessage({
+              type: 'chat',
+              text: data.text,
+              senderId: data.senderId,
+              timestamp: data.timestamp,
+              self: data.self === true,
+            });
+            break;
+
+          case 'url_sync':
+            console.log('[Browser] URL sync received from:', data.fromId, '→', data.url);
+            loadUrl(data.url, true);
+            addSystemMsg(`🔗 ${data.fromId} navigated to: ${data.url}`);
+            break;
+
+          case 'system':
+            addSystemMsg(data.text);
+            if (data.userCount !== undefined) {
+              userCountBadge.textContent = `👥 ${data.userCount}`;
+            }
+            break;
+
+          case 'user_count':
+            userCountBadge.textContent = `👥 ${data.userCount}`;
+            break;
+
+          default:
+            console.warn('[WS] Unknown message type:', data.type);
+        }
+      };
+
+      ws.onclose = (e) => {
+        console.log('[WS] Connection closed:', e.code, e.reason);
+        setConnected(false);
+
+        if (reconnectAttempts > 0) {
+          reconnOverlay.classList.add('visible');
+        }
+
+        scheduleReconnect();
+      };
+
+      ws.onerror = (err) => {
+        console.error('[WS] Error:', err);
+      };
+    }
+
+    function scheduleReconnect() {
+      clearTimeout(reconnectTimer);
+      reconnectAttempts++;
+      const delay = Math.min(1000 * reconnectAttempts, MAX_RECONNECT_DELAY);
+      console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+      reconnectTimer = setTimeout(connectWs, delay);
+    }
+
+    // ────────────────────────────────────────────────────
+    // BOOT
+    // ────────────────────────────────────────────────────
+    console.log('[App] Initializing SyncChat…');
+    connectWs();
+  </script>
+</body>
+</html>
